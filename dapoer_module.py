@@ -1,12 +1,7 @@
 # dapoer_module.py
-
 import pandas as pd
 import re
-import random
-from langchain_core.tools import Tool
-from langchain.memory import ConversationBufferMemory
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.agents import initialize_agent, AgentType
+import google.generativeai as genai
 
 # Load dan bersihkan data
 CSV_FILE_PATH = 'https://raw.githubusercontent.com/valengrcla/celerates/refs/heads/main/Indonesian_Food_Recipes.csv'
@@ -29,81 +24,53 @@ df_cleaned['Steps_Normalized'] = df_cleaned['Steps'].apply(normalize_text)
 # Format hasil masakan
 def format_recipe(row):
     return f"""🍽️ **{row['Title']}**
-
+    
 **Bahan-bahan:**  
 {row['Ingredients']}
 
 **Langkah Memasak:**  
 {row['Steps']}"""
 
-# Tool 1: Cari berdasarkan judul
-def search_by_title(query: str) -> str:
-    query_norm = normalize_text(query)
-    result = df_cleaned[df_cleaned['Title_Normalized'].str.contains(query_norm)]
-    if not result.empty:
-        return format_recipe(result.iloc[0])
-    return "Tidak ditemukan masakan dengan judul tersebut."
-
-# Tool 2: Cari berdasarkan bahan
-def search_by_ingredient(query: str) -> str:
-    query_norm = normalize_text(query)
-    result = df_cleaned[df_cleaned['Ingredients_Normalized'].str.contains(query_norm)]
-    if not result.empty:
-        titles = result.head(5)['Title'].tolist()
-        return "Masakan yang menggunakan bahan tersebut:\n- " + "\n- ".join(titles)
-    return "Tidak ditemukan masakan dengan bahan tersebut."
-
-# Tool 3: Cari berdasarkan metode masak
-def search_by_method(query: str) -> str:
-    query_norm = normalize_text(query)
-    for method in ['goreng', 'rebus', 'panggang', 'kukus']:
-        if method in query_norm:
-            result = df_cleaned[df_cleaned['Steps_Normalized'].str.contains(method)]
-            if not result.empty:
-                titles = result.head(5)['Title'].tolist()
-                return f"Masakan yang dimasak dengan cara {method}:\n- " + "\n- ".join(titles)
-    return "Tidak ditemukan metode memasak yang sesuai."
-
-# Tool 4: Filter masakan mudah
-def search_easy_recipes(_: str) -> str:
-    result = df_cleaned[df_cleaned['Steps'].str.len() < 300].head(5)['Title'].tolist()
-    return "Rekomendasi masakan mudah:\n- " + "\n- ".join(result)
-
-# Tool 5: RAG-like - 5 resep acak sebagai referensi
-def rag_response(query: str) -> str:
-    samples = df_cleaned.sample(5, random_state=random.randint(1, 999))
-    context = "\n\n".join([
-        f"{row['Title']}:\nBahan: {row['Ingredients']}\nLangkah: {row['Steps']}"
-        for _, row in samples.iterrows()
-    ])
-    return f"""
-Berikut referensi resep masakan:
-
-{context}
-
-Pertanyaan: {query}
-Silakan jawab berdasarkan referensi di atas.
-""".strip()
-
-# Fungsi utama agent handler
+# Fungsi utama untuk handle pertanyaan
 def handle_user_query(prompt, model):
-    llm = ChatGoogleGenerativeAI(model=model, temperature=0.5)
-    memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+    prompt_lower = normalize_text(prompt)
 
-    tools = [
-        Tool(name="CariJudul", func=search_by_title, description="Gunakan untuk mencari resep berdasarkan nama masakan"),
-        Tool(name="CariBahan", func=search_by_ingredient, description="Gunakan untuk mencari masakan berdasarkan bahan"),
-        Tool(name="CariMetode", func=search_by_method, description="Gunakan untuk mencari masakan berdasarkan metode memasak"),
-        Tool(name="ResepMudah", func=search_easy_recipes, description="Gunakan jika pengguna ingin resep mudah"),
-        Tool(name="ResepRAG", func=rag_response, description="Gunakan untuk menjawab pertanyaan umum tentang masakan menggunakan referensi acak")
-    ]
+    # Tool 1: Cari berdasarkan nama masakan
+    match_title = df_cleaned[df_cleaned['Title_Normalized'].str.contains(prompt_lower)]
+    if not match_title.empty:
+        return format_recipe(match_title.iloc[0])
 
-    agent = initialize_agent(
-        tools=tools,
-        llm=llm,
-        agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-        memory=memory,
-        verbose=False
-    )
+    # Tool 2: Cari berdasarkan bahan
+    match_bahan = df_cleaned[df_cleaned['Ingredients_Normalized'].str.contains(prompt_lower)]
+    if not match_bahan.empty:
+        hasil = match_bahan.head(5)['Title'].tolist()
+        return "Masakan yang menggunakan bahan tersebut:\n- " + "\n- ".join(hasil)
 
-    return agent.run(prompt)
+    # Tool 3: Cari berdasarkan metode masak
+    for metode in ['goreng', 'panggang', 'rebus', 'kukus']:
+        if metode in prompt_lower:
+            cocok = df_cleaned[df_cleaned['Steps_Normalized'].str.contains(metode)]
+            if not cocok.empty:
+                hasil = cocok.head(5)['Title'].tolist()
+                return f"Masakan yang dimasak dengan cara {metode}:\n- " + "\n- ".join(hasil)
+
+    # Tool 4: Filter kesulitan (pakai heuristik kata di steps)
+    if "mudah" in prompt_lower or "pemula" in prompt_lower:
+        hasil = df_cleaned[df_cleaned['Steps'].str.len() < 300].head(5)['Title'].tolist()
+        return "Rekomendasi masakan mudah:\n- " + "\n- ".join(hasil)
+
+    # Tool 5: RAG-like: Ambil 5 resep acak sebagai context
+    docs = "\n\n".join([
+        f"{row['Title']}:\nBahan: {row['Ingredients']}\nLangkah: {row['Steps']}"
+        for _, row in df_cleaned.sample(5, random_state=42).iterrows()
+    ])
+    full_prompt = f"""
+Berikut beberapa resep masakan Indonesia:
+
+{docs}
+
+Gunakan referensi di atas untuk menjawab pertanyaan berikut:
+{prompt}
+"""
+    response = model.generate_content(full_prompt)
+    return response.text
