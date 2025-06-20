@@ -35,8 +35,3 @@ if prompt := st.chat_input("Tanyakan resep, bahan, atau metode memasak..."):
         response = handle_user_query(prompt, model)
         st.markdown(response)
         st.session_state.messages.append({"role": "assistant", "content": response})
-
-
-
-3/3
-
