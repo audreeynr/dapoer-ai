@@ -23,13 +23,20 @@ df_cleaned['Steps_Normalized'] = df_cleaned['Steps'].apply(normalize_text)
 
 # Format hasil masakan
 def format_recipe(row):
-    return f"""🍽 *{row['Title']}*
-    
-*Bahan-bahan:*  
-{row['Ingredients']}
+    # Bagi bahan dan langkah menjadi list
+    bahan_list = [b.strip().capitalize() for b in row['Ingredients'].split('\n') if b.strip()]
+    langkah_list = [l.strip().capitalize() for l in re.split(r'\d+\.\s*|\n', row['Steps']) if l.strip()]
 
-*Langkah Memasak:*  
-{row['Steps']}"""
+    bahan_md = "\n".join([f"- {b}" for b in bahan_list])
+    langkah_md = "\n".join([f"{i+1}. {l}" for i, l in enumerate(langkah_list)])
+
+    return f"""🍽 **{row['Title']}**
+
+**Bahan-bahan:**  
+{bahan_md}
+
+**Langkah Memasak:**  
+{langkah_md}"""
 
 # Fungsi utama untuk handle pertanyaan
 def handle_user_query(prompt, model):
