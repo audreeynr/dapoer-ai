@@ -1,142 +1,94 @@
 import streamlit as st
 import pandas as pd
 import re
-import google.generativeai as genai
+import os
 
-# --- Load & Preprocess Data ---
-CSV_FILE_PATH = 'https://raw.githubusercontent.com/valengrcla/celerates/refs/heads/main/Indonesian_Food_Recipes.csv'
-df = pd.read_csv(CSV_FILE_PATH)
-df_cleaned = df.dropna(subset=['Title', 'Ingredients', 'Steps']).drop_duplicates()
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import GoogleGenerativeAIEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.documents import Document
+from langchain_core.tools import tool
+from langchain.agents import initialize_agent, AgentType
+from langchain.agents import load_tools
+from langchain.agents.agent_toolkits import create_retriever_tool
 
-def normalize_text(text):
-    if isinstance(text, str):
-        text = text.lower()
-        text = re.sub(r'[^a-z0-9\s]', '', text)
-        text = re.sub(r'\s+', ' ', text).strip()
-        return text
-    return text
+# --- Load & Clean Recipe Data ---
+CSV_FILE = 'https://raw.githubusercontent.com/valengrcla/celerates/refs/heads/main/Indonesian_Food_Recipes.csv'
+df = pd.read_csv(CSV_FILE).dropna(subset=['Title', 'Ingredients', 'Steps']).drop_duplicates()
 
-df_cleaned['Title_Normalized'] = df_cleaned['Title'].apply(normalize_text)
-df_cleaned['Ingredients_Normalized'] = df_cleaned['Ingredients'].apply(normalize_text)
-df_cleaned['Steps_Normalized'] = df_cleaned['Steps'].apply(normalize_text)
+def preprocess(row):
+    return f"Judul: {row['Title']}\n\nBahan-bahan:\n{row['Ingredients']}\n\nLangkah-langkah:\n{row['Steps']}"
 
-# --- Recipe Search Utilities ---
-def detect_ingredients(user_input):
-    unique_ingredients = set()
-    for row in df_cleaned['Ingredients_Normalized']:
-        unique_ingredients.update(row.split())
-    return [word for word in normalize_text(user_input).split() if word in unique_ingredients]
+documents = [Document(page_content=preprocess(row), metadata={"judul": row['Title']}) for _, row in df.iterrows()]
 
-def get_recipe_by_ingredient(ingredients):
-    matched_recipes = []
-    for _, row in df_cleaned.iterrows():
-        ing_list = row['Ingredients_Normalized']
-        match_count = sum(ing in ing_list for ing in ingredients)
-        if match_count > 0:
-            matched_recipes.append((match_count, row))
-    matched_recipes.sort(reverse=True, key=lambda x: x[0])
-    top_matches = [x[1] for x in matched_recipes[:3]]
-    return pd.DataFrame(top_matches)
+# --- Streamlit UI Setup ---
+st.set_page_config(page_title="🍳 Dapoer-AI", page_icon="🍲")
+st.title("🍛 Dapoer-AI - Chatbot Resep Masakan Indonesia dengan LLM + RAG")
 
-def get_recipe_by_name(recipe_name):
-    keywords = normalize_text(recipe_name).split()
-    return df_cleaned[df_cleaned['Title_Normalized'].apply(lambda title: all(kw in title for kw in keywords))]
-
-def get_recipe_by_type(dish_type):
-    keywords = normalize_text(dish_type).split()
-    return df_cleaned[df_cleaned['Title_Normalized'].apply(lambda title: all(kw in title for kw in keywords))]
-
-def get_easy_recipes(top_n=3):
-    df_temp = df_cleaned.copy()
-    df_temp["num_ingredients"] = df_temp["Ingredients"].apply(lambda x: len(x.split('--')))
-    df_temp["num_steps"] = df_temp["Steps"].apply(lambda x: len(x.strip().split('\n')))
-    df_temp["difficulty_score"] = df_temp["num_ingredients"] + df_temp["num_steps"]
-    df_sorted = df_temp.sort_values(by="difficulty_score").head(top_n)
-    return df_sorted
-
-def get_easy_recipe_response():
-    easy_df = get_easy_recipes()
-    return generate_nlg_response(easy_df)
-
-def generate_nlg_response(df_result):
-    if df_result.empty:
-        return "Maaf, saya tidak menemukan resep yang cocok berdasarkan permintaanmu."
-    row = df_result.iloc[0]
-    title = row['Title']
-    ingredients = row['Ingredients'].split('--')
-    steps = row['Steps'].split('\n')
-    response = f"🍽 {title}\n\n📌 Bahan-bahan:\n"
-    for item in ingredients:
-        response += f"- {item.strip()}\n"
-    response += "\n🔪 Langkah-langkah memasak:\n"
-    for i, step in enumerate(steps, 1):
-        response += f"{i}. {step.strip()}\n"
-    return response
-
-# --- Query Handler ---
-FORBIDDEN_INGREDIENTS = ["babi", "daging babi", "ham", "bacon", "salmon", "domba", "sapi wagyu", "pork", "shrimp"]
-
-def handle_user_query(query, model):
-    query_normalized = normalize_text(query)
-    if any(bahan in query_normalized for bahan in FORBIDDEN_INGREDIENTS):
-        return "Maaf, kami tidak memiliki resep yang menggunakan bahan tersebut dalam database kami."
-
-    if "mudah" in query_normalized or "gampang" in query_normalized or "paling mudah" in query_normalized:
-        return get_easy_recipe_response()
-
-    name_match_df = get_recipe_by_name(query)
-    if not name_match_df.empty:
-        return generate_nlg_response(name_match_df)
-
-    ingredients = detect_ingredients(query)
-    if ingredients:
-        matched_df = get_recipe_by_ingredient(ingredients)
-        if not matched_df.empty:
-            return generate_nlg_response(matched_df)
-
-    type_match_df = get_recipe_by_type(query_normalized)
-    if not type_match_df.empty:
-        return generate_nlg_response(type_match_df)
-
-    # Fallback ke Gemini
-    prompt = f"""
-Kamu adalah asisten resep masakan Indonesia.
-Pertanyaan: {query}
-Jawaban:
-"""
-    response = model.generate_content(prompt)
-    return response.text
-
-# ================= STREAMLIT APP =================
-st.set_page_config(page_title="Dapoer-AI", page_icon="🍲")
-st.title("🍛 Dapoer-AI - Asisten Resep Masakan Indonesia")
-
-# Konfigurasi API Key
 GOOGLE_API_KEY = st.text_input("Masukkan API Key Gemini kamu:", type="password")
 if not GOOGLE_API_KEY:
-    st.warning("Masukkan API key Gemini untuk melanjutkan.")
+    st.warning("Masukkan API key terlebih dahulu.")
     st.stop()
 
-genai.configure(api_key=GOOGLE_API_KEY)
-model = genai.GenerativeModel(model_name="gemini-1.5-flash-latest")
+# --- Konfigurasi LLM & Embedding ---
+os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY
 
-# Inisialisasi chat session
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-    st.session_state.messages.append({"role": "assistant", "content": "👋 Hai! Mau masak apa hari ini?"})
+embedding = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+vectorstore = FAISS.from_documents(documents, embedding)
+retriever = vectorstore.as_retriever(search_type="similarity", k=3)
 
-# Tampilkan riwayat percakapan
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+# --- Buat Tool Langchain ---
+@tool
+def get_easy_recipe(_: str) -> str:
+    """Memberikan resep yang mudah dengan sedikit bahan dan langkah."""
+    df["score"] = df["Ingredients"].str.count("--") + df["Steps"].str.count("\n")
+    easiest = df.sort_values(by="score").iloc[0]
+    return f"Resep termudah:\n{preprocess(easiest)}"
 
-# Input pengguna
-if prompt := st.chat_input("Tanyakan resep, bahan, atau nama masakan..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
+@tool
+def list_all_recipes(_: str) -> str:
+    """Menampilkan daftar semua judul resep yang tersedia."""
+    return "\n".join(df['Title'].tolist())
+
+retriever_tool = create_retriever_tool(
+    retriever,
+    name="search_resep_masakan",
+    description="Mencari resep makanan Indonesia dari data yang tersedia berdasarkan permintaan pengguna."
+)
+
+tools = [retriever_tool, get_easy_recipe, list_all_recipes]
+
+# --- Setup LLM ---
+llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.7)
+
+# --- Agent Initialization ---
+agent_executor = initialize_agent(
+    tools=tools,
+    llm=llm,
+    agent=AgentType.OPENAI_FUNCTIONS,
+    verbose=True
+)
+
+# --- Chat Memory (3 terakhir) ---
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+# --- Display Chat History ---
+for role, message in st.session_state.chat_history:
+    with st.chat_message(role):
+        st.markdown(message)
+
+# --- User Chat Input ---
+if prompt := st.chat_input("Tanyakan resep, bahan, atau jenis masakan..."):
+    st.session_state.chat_history.append(("user", prompt))
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        response = handle_user_query(prompt, model)
+        response = agent_executor.run(prompt)
         st.markdown(response)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+        st.session_state.chat_history.append(("assistant", response))
+
+    # Batasi ke 6 pesan (3 interaksi)
+    if len(st.session_state.chat_history) > 6:
+        st.session_state.chat_history = st.session_state.chat_history[-6:]
