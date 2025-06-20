@@ -29,7 +29,6 @@ def format_recipe(row):
 
     # Normalisasi langkah: pisah berdasarkan newline atau angka
     langkah_raw = re.split(r'\d+\.\s*|\n', row['Steps'])
-    langkah_list = [l.strip().capitalize() for l in langkah_raw if l.strip()]
 
     # Format markdown
     bahan_md = "\n".join([f"- {b}" for b in bahan_list])
