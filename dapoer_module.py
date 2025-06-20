@@ -1,37 +1,23 @@
 # dapoer_module.py
 import pandas as pd
 import re
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import FAISS
-from langchain.document_loaders import DataFrameLoader
-from langchain.text_splitter import CharacterTextSplitter
-from langchain.chains import RetrievalQA
 
 # Load data
 df = pd.read_csv("https://raw.githubusercontent.com/valengrcla/celerates/refs/heads/main/Indonesian_Food_Recipes.csv")
-
-# Membersihkan kolom jika ada null
 df.fillna("", inplace=True)
 
-# Persiapan RAG
-def create_retriever():
-    docs_df = df[["Nama", "Deskripsi"]].copy()
-    docs_df["text"] = docs_df["Nama"] + "\n" + docs_df["Deskripsi"]
+# Format satu resep sebagai string
+def format_recipe(row):
+    return f"""
+**{row['Nama']}**
+Deskripsi: {row['Deskripsi']}
+Bahan: {row['Bahan']}
+Langkah: {row['Langkah']}
+Tingkat Kesulitan: {row['Tingkat_Kesulitan']}
+Cara Masak: {row['Cara_Masak']}
+"""
 
-    loader = DataFrameLoader(docs_df, page_content_column="text")
-    docs = loader.load()
-
-    splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-    split_docs = splitter.split_documents(docs)
-
-    embedding = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    vectordb = FAISS.from_documents(split_docs, embedding)
-
-    return vectordb.as_retriever()
-
-retriever = create_retriever()
-
-# Fungsi utama untuk handle query user
+# Fungsi utama
 def handle_user_query(prompt, model):
     prompt_lower = prompt.lower()
 
@@ -39,7 +25,7 @@ def handle_user_query(prompt, model):
     match_name = df[df["Nama"].str.lower().str.contains(prompt_lower)]
     if not match_name.empty:
         result = match_name.iloc[0]
-        return f"**{result['Nama']}**\n\nDeskripsi: {result['Deskripsi']}\n\nBahan: {result['Bahan']}\n\nLangkah: {result['Langkah']}\n\nTingkat Kesulitan: {result['Tingkat_Kesulitan']}\nCara Masak: {result['Cara_Masak']}"
+        return format_recipe(result)
 
     # Tool 2: Filter berdasarkan bahan
     bahan_match = df[df["Bahan"].str.lower().str.contains(prompt_lower)]
@@ -58,7 +44,18 @@ def handle_user_query(prompt, model):
             filtered = df[df["Cara_Masak"].str.lower().str.contains(method)].head(5)
             return f"Berikut beberapa masakan yang dimasak dengan cara {method}:\n- " + "\n- ".join(filtered["Nama"].tolist())
 
-    # Tool 5: RAG jika tidak cocok ke semua tools di atas
-    chain = RetrievalQA.from_chain_type(llm=model, retriever=retriever)
-    result = chain.run(prompt)
-    return result
+    # Tool 5: Prompt ke Gemini (pseudo-RAG)
+    top_docs = "\n\n".join([
+        f"{row['Nama']}:\n{row['Deskripsi']}" for _, row in df.head(10).iterrows()
+    ])
+
+    full_prompt = f"""
+Berikut beberapa deskripsi masakan Indonesia:
+{top_docs}
+
+Berdasarkan informasi di atas, jawab pertanyaan ini:
+{prompt}
+"""
+
+    response = model.generate_content(full_prompt)
+    return response.text
