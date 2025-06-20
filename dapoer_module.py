@@ -26,13 +26,10 @@ def format_recipe(row):
     # Normalisasi bahan: pisah berdasarkan newline, '--', atau koma
     bahan_raw = re.split(r'\n|--|,', row['Ingredients'])
     bahan_list = [b.strip().capitalize() for b in bahan_raw if b.strip()]
-
-    # Normalisasi langkah: pisah berdasarkan newline atau angka
-    langkah_raw = re.split(r'\d+\.\s*|\n', row['Steps'])
-
-    # Format markdown
     bahan_md = "\n".join([f"- {b}" for b in bahan_list])
-    langkah_md = "\n".join([f"- {l}" for l in langkah_list])
+
+    # Langkah memasak langsung tampilkan tanpa tambahan bullet
+    langkah_md = row['Steps'].strip()
 
     return f"""🍽 **{row['Title']}**
 
@@ -41,7 +38,6 @@ def format_recipe(row):
 
 **Langkah Memasak:**  
 {langkah_md}"""
-
 
 # Fungsi utama untuk handle pertanyaan
 def handle_user_query(prompt, model):
