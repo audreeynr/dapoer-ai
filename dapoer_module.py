@@ -1,12 +1,13 @@
-# dapoer_module.py
 import pandas as pd
 import re
+from io import BytesIO
+from fpdf import FPDF
 
-# Load data
+# Load dan bersihkan data
 df = pd.read_csv("https://raw.githubusercontent.com/valengrcla/celerates/refs/heads/main/Indonesian_Food_Recipes.csv")
+df.columns = [col.strip().replace('\ufeff', '') for col in df.columns]
 df.fillna("", inplace=True)
 
-# Format satu resep sebagai string
 def format_recipe(row):
     return f"""
 **{row['Nama']}**
@@ -17,44 +18,83 @@ Tingkat Kesulitan: {row['Tingkat_Kesulitan']}
 Cara Masak: {row['Cara_Masak']}
 """
 
-# Fungsi utama
+# Fitur tambahan: Export ke PDF
+def export_to_pdf(recipe_row):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+
+    pdf.multi_cell(0, 10, f"Nama: {recipe_row['Nama']}")
+    pdf.multi_cell(0, 10, f"\nDeskripsi:\n{recipe_row['Deskripsi']}")
+    pdf.multi_cell(0, 10, f"\nBahan:\n{recipe_row['Bahan']}")
+    pdf.multi_cell(0, 10, f"\nLangkah:\n{recipe_row['Langkah']}")
+    pdf.multi_cell(0, 10, f"\nTingkat Kesulitan: {recipe_row['Tingkat_Kesulitan']}")
+    pdf.multi_cell(0, 10, f"Cara Masak: {recipe_row['Cara_Masak']}")
+
+    buffer = BytesIO()
+    pdf.output(buffer)
+    buffer.seek(0)
+    return buffer
+
+# Fitur tambahan: Buat daftar belanja
+def generate_shopping_list(nama_masakan):
+    match = df[df["Nama"].str.lower() == nama_masakan.lower()]
+    if not match.empty:
+        bahan = match.iloc[0]["Bahan"]
+        daftar = re.split(r",|\n|•|-", bahan)
+        daftar = [item.strip(" •-") for item in daftar if item.strip()]
+        return "🛒 Daftar Belanja:\n- " + "\n- ".join(daftar)
+    return "Resep tidak ditemukan."
+
+# Fungsi utama chatbot
 def handle_user_query(prompt, model):
     prompt_lower = prompt.lower()
 
-    # Tool 1: Cari berdasarkan nama
+    # Tool 1: Cek apakah export ke PDF
+    if "export" in prompt_lower and "pdf" in prompt_lower:
+        for nama in df["Nama"]:
+            if nama.lower() in prompt_lower:
+                match = df[df["Nama"].str.lower() == nama.lower()]
+                if not match.empty:
+                    return export_to_pdf(match.iloc[0])
+        return "Resep tidak ditemukan."
+
+    # Tool 2: Cek apakah minta list belanja
+    if "list belanja" in prompt_lower or "belanja" in prompt_lower:
+        for nama in df["Nama"]:
+            if nama.lower() in prompt_lower:
+                return generate_shopping_list(nama)
+
+    # Tool 3: Pencarian nama resep
     match_name = df[df["Nama"].str.lower().str.contains(prompt_lower)]
     if not match_name.empty:
-        result = match_name.iloc[0]
-        return format_recipe(result)
+        return format_recipe(match_name.iloc[0])
 
-    # Tool 2: Filter berdasarkan bahan
+    # Tool 4: Bahan
     bahan_match = df[df["Bahan"].str.lower().str.contains(prompt_lower)]
     if not bahan_match.empty:
-        nama_masakan = ", ".join(bahan_match["Nama"].tolist()[:5])
-        return f"Beberapa masakan yang menggunakan **{prompt}** adalah: {nama_masakan}"
+        return "Masakan dengan bahan tersebut:\n- " + "\n- ".join(bahan_match["Nama"].tolist()[:5])
 
-    # Tool 3: Sort berdasarkan tingkat kesulitan
-    if "termudah" in prompt_lower or "mudah" in prompt_lower:
+    # Tool 5: Tingkat kesulitan
+    if "mudah" in prompt_lower:
         mudah = df[df["Tingkat_Kesulitan"].str.lower() == "mudah"].head(5)
         return "Masakan termudah:\n- " + "\n- ".join(mudah["Nama"].tolist())
 
-    # Tool 4: Sort berdasarkan cara masak
-    for method in ["rebus", "panggang", "goreng", "kukus"]:
-        if method in prompt_lower:
-            filtered = df[df["Cara_Masak"].str.lower().str.contains(method)].head(5)
-            return f"Berikut beberapa masakan yang dimasak dengan cara {method}:\n- " + "\n- ".join(filtered["Nama"].tolist())
+    # Tool 6: Cara masak
+    for metode in ["rebus", "panggang", "goreng", "kukus"]:
+        if metode in prompt_lower:
+            filtered = df[df["Cara_Masak"].str.lower().str.contains(metode)].head(5)
+            return f"Masakan dengan cara {metode}:\n- " + "\n- ".join(filtered["Nama"].tolist())
 
-    # Tool 5: Prompt ke Gemini (pseudo-RAG)
-    top_docs = "\n\n".join([
+    # Tool 7: Gemini (fallback)
+    context = "\n\n".join([
         f"{row['Nama']}:\n{row['Deskripsi']}" for _, row in df.head(10).iterrows()
     ])
-
     full_prompt = f"""
-Berikut beberapa deskripsi masakan Indonesia:
-{top_docs}
+Berikut adalah ringkasan masakan Indonesia:
+{context}
 
-Berdasarkan informasi di atas, jawab pertanyaan ini:
-{prompt}
+Pertanyaan: {prompt}
 """
 
     response = model.generate_content(full_prompt)
