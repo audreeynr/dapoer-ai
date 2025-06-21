@@ -72,13 +72,15 @@ def handle_user_query(prompt, model):
         f"{row['Title']}:\nBahan: {row['Ingredients']}\nLangkah: {row['Steps']}"
         for _, row in df_cleaned.sample(5, random_state=42).iterrows()
     ])
-    full_prompt = f"""
-Berikut beberapa resep masakan Indonesia:
+full_prompt = f"""
+Berikut beberapa resep masakan Indonesia yang dapat kamu jadikan referensi:
 
 {docs}
 
-Gunakan referensi di atas untuk menjawab pertanyaan berikut:
+Gunakan contoh-contoh di atas **sebagai inspirasi atau acuan**, dan jawablah pertanyaan berikut dengan bebas:
+
+**Pertanyaan:**
 {prompt}
+
+Jika tidak ada jawaban yang persis dari contoh, berikan jawaban terbaik berdasarkan pengetahuan umum tentang resep Indonesia.
 """
-    response = model.generate_content(full_prompt)
-    return response.text
