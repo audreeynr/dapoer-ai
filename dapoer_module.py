@@ -79,7 +79,7 @@ def handle_user_query(prompt, model):
     # Tool 5: RAG-like: Ambil 5 resep acak sebagai context
     docs = "\n\n".join([
         f"{row['Title']}:\nBahan: {row['Ingredients']}\nLangkah: {row['Steps']}"
-        for _, row in df_cleaned.sample(5, random_state=42).iterrows()
+        for _, row in df_cleaned.sample(5).iterrows()
     ])
     full_prompt = f"""
 Berikut beberapa resep masakan Indonesia:
