@@ -43,15 +43,21 @@ def format_recipe(row):
 def handle_user_query(prompt, model):
     prompt_lower = normalize_text(prompt)
 
-    # Tool 1: Cari berdasarkan nama masakan
-    match_title = df_cleaned[df_cleaned['Title_Normalized'].str.contains(prompt_lower)]
+    # Bersihkan kata-kata tambahan umum agar pencarian judul lebih akurat
+    cleaned_prompt = re.sub(r'\b(resep|masakan|cara membuat)\b', '', prompt_lower).strip()
+
+    # Tool 1: Cari berdasarkan nama masakan (judul)
+    match_title = df_cleaned[df_cleaned['Title_Normalized'].str.contains(cleaned_prompt)]
     if not match_title.empty:
         return format_recipe(match_title.iloc[0])
 
-    # Tool 2: Cari berdasarkan bahan
-    match_bahan = df_cleaned[df_cleaned['Ingredients_Normalized'].str.contains(prompt_lower)]
-    if not match_bahan.empty:
-        hasil = match_bahan.head(5)['Title'].tolist()
+    # Tool 2: Cari berdasarkan bahan (token per kata)
+    bahan_keywords = cleaned_prompt.split()
+    cocok_bahan = df_cleaned[df_cleaned['Ingredients_Normalized'].apply(
+        lambda x: any(kata in x for kata in bahan_keywords)
+    )]
+    if not cocok_bahan.empty:
+        hasil = cocok_bahan.head(5)['Title'].tolist()
         return "Masakan yang menggunakan bahan tersebut:\n- " + "\n- ".join(hasil)
 
     # Tool 3: Cari berdasarkan metode masak
@@ -62,15 +68,15 @@ def handle_user_query(prompt, model):
                 hasil = cocok.head(5)['Title'].tolist()
                 return f"Masakan yang dimasak dengan cara {metode}:\n- " + "\n- ".join(hasil)
 
-    # Tool 4: Filter kesulitan (pakai heuristik kata di steps)
+    # Tool 4: Filter kesulitan (pakai heuristik: langkah < 300 karakter dianggap mudah)
     if "mudah" in prompt_lower or "pemula" in prompt_lower:
         hasil = df_cleaned[df_cleaned['Steps'].str.len() < 300].head(5)['Title'].tolist()
         return "Rekomendasi masakan mudah:\n- " + "\n- ".join(hasil)
 
-    # Tool 5: RAG-like: Ambil 5 resep acak sebagai context
+    # Tool 5: RAG-like: Ambil 5 resep acak sebagai context (tanpa random_state agar bervariasi)
     docs = "\n\n".join([
         f"{row['Title']}:\nBahan: {row['Ingredients']}\nLangkah: {row['Steps']}"
-        for _, row in df_cleaned.sample(5, random_state=42).iterrows()
+        for _, row in df_cleaned.sample(5).iterrows()
     ])
     full_prompt = f"""
 Berikut beberapa resep masakan Indonesia:
