@@ -17,26 +17,16 @@ def normalize_text(text):
         return text
     return text
 
-# Ekstraksi kata kunci bahan dari prompt user
-def extract_bahan_keywords(prompt_lower):
-    # Ambil semua kata unik dari kolom Ingredients_Normalized
-    semua_kata_bahan = set()
-    for baris in df_cleaned['Ingredients_Normalized']:
-        semua_kata_bahan.update(baris.split())
-
-    # Hanya ambil kata dari user prompt yang memang ada di daftar bahan
-    return [kata for kata in prompt_lower.split() if kata in semua_kata_bahan]
-
 df_cleaned['Title_Normalized'] = df_cleaned['Title'].apply(normalize_text)
 df_cleaned['Ingredients_Normalized'] = df_cleaned['Ingredients'].apply(normalize_text)
 df_cleaned['Steps_Normalized'] = df_cleaned['Steps'].apply(normalize_text)
 
 # Format hasil masakan
-def extract_bahan_keywords(prompt_lower):
-    # Gabungkan semua ingredients jadi satu string
-    semua_bahan = " ".join(df_cleaned['Ingredients_Normalized'])
-    keywords = [kata for kata in prompt_lower.split() if kata in semua_bahan]
-    return keywords
+def format_recipe(row):
+    # Normalisasi bahan: pisah berdasarkan newline, '--', atau koma
+    bahan_raw = re.split(r'\n|--|,', row['Ingredients'])
+    bahan_list = [b.strip().capitalize() for b in bahan_raw if b.strip()]
+    bahan_md = "\n".join([f"- {b}" for b in bahan_list])
 
     # Langkah memasak langsung tampilkan tanpa tambahan bullet
     langkah_md = row['Steps'].strip()
@@ -58,19 +48,11 @@ def handle_user_query(prompt, model):
     if not match_title.empty:
         return format_recipe(match_title.iloc[0])
 
-    # Tool 2: Cari berdasarkan bahan (lebih akurat)
-    keywords = extract_bahan_keywords(prompt_lower)
-    if keywords:
-        def cocokkan_bahan(x):
-            bahan_kalimat = set(x.split())
-            return any(k in bahan_kalimat for k in keywords)
-
-        match_bahan = df_cleaned[df_cleaned['Ingredients_Normalized'].apply(cocokkan_bahan)]
-        if not match_bahan.empty:
-            hasil = match_bahan.head(5)['Title'].tolist()
-            return f"Masakan yang menggunakan bahan {', '.join(keywords)}:\n- " + "\n- ".join(hasil)
-        else:
-            return f"Maaf, belum ditemukan resep yang menggunakan bahan {', '.join(keywords)}."
+    # Tool 2: Cari berdasarkan bahan
+    match_bahan = df_cleaned[df_cleaned['Ingredients_Normalized'].str.contains(prompt_lower)]
+    if not match_bahan.empty:
+        hasil = match_bahan.head(5)['Title'].tolist()
+        return "Masakan yang menggunakan bahan tersebut:\n- " + "\n- ".join(hasil)
 
     # Tool 3: Cari berdasarkan metode masak
     for metode in ['goreng', 'panggang', 'rebus', 'kukus']:
