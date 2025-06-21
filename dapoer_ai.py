@@ -1,18 +1,22 @@
+# dapoer_ai.py
 import streamlit as st
-from dapoer_module import init_agent
+import google.generativeai as genai
+from dapoer_module import handle_user_query
 
 st.set_page_config(page_title="Dapoer-AI", page_icon="🍲")
-st.title("🍛 Dapoer-AI - Asisten Resep Masakan Indonesia (Agentic + RAG)")
+st.title("🍛 Dapoer-AI - Asisten Resep Masakan Indonesia")
 
-# Input API Key
+# API Key input
 GOOGLE_API_KEY = st.text_input("Masukkan API Key Gemini kamu:", type="password")
 if not GOOGLE_API_KEY:
     st.warning("Silakan masukkan API key untuk mulai.")
     st.stop()
 
-# Inisialisasi Agent sekali
-if "agent" not in st.session_state:
-    st.session_state.agent = init_agent(GOOGLE_API_KEY)
+genai.configure(api_key=GOOGLE_API_KEY)
+model = genai.GenerativeModel(model_name="gemini-1.5-flash-latest")
+
+# Inisialisasi chat memory
+if "messages" not in st.session_state:
     st.session_state.messages = []
     st.session_state.messages.append({"role": "assistant", "content": "👋 Hai! Mau masak apa hari ini?"})
 
@@ -21,13 +25,13 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# Chat input
+# Input chat
 if prompt := st.chat_input("Tanyakan resep, bahan, atau metode memasak..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        response = st.session_state.agent.run(prompt)
+        response = handle_user_query(prompt, model)
         st.markdown(response)
         st.session_state.messages.append({"role": "assistant", "content": response})
