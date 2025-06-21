@@ -61,25 +61,17 @@ def handle_user_query(prompt, model):
             if not cocok.empty:
                 hasil = cocok.head(5)['Title'].tolist()
                 return f"Masakan yang dimasak dengan cara {metode}:\n- " + "\n- ".join(hasil)
+
     # Tool 4: Filter kesulitan (pakai heuristik kata di steps)
     if "mudah" in prompt_lower or "pemula" in prompt_lower:
         hasil = df_cleaned[df_cleaned['Steps'].str.len() < 300].head(5)['Title'].tolist()
         return "Rekomendasi masakan mudah:\n- " + "\n- ".join(hasil)
 
-# Tool 5: RAG-like: Ambil 5 resep acak atau relevan sebagai context
-try:
-    # Filter berdasarkan keyword (lebih baik dari acak)
-    filtered_df = df_cleaned[df_cleaned['Title_Normalized'].str.contains(prompt_lower) | 
-                             df_cleaned['Ingredients_Normalized'].str.contains(prompt_lower) | 
-                             df_cleaned['Steps_Normalized'].str.contains(prompt_lower)]
-
-    rag_source = filtered_df.sample(5) if len(filtered_df) >= 5 else df_cleaned.sample(5)
-
+    # Tool 5: RAG-like: Ambil 5 resep acak sebagai context
     docs = "\n\n".join([
         f"{row['Title']}:\nBahan: {row['Ingredients']}\nLangkah: {row['Steps']}"
-        for _, row in rag_source.iterrows()
+        for _, row in df_cleaned.sample(5, random_state=42).iterrows()
     ])
-
     full_prompt = f"""
 Berikut beberapa resep masakan Indonesia:
 
@@ -90,6 +82,3 @@ Gunakan referensi di atas untuk menjawab pertanyaan berikut:
 """
     response = model.generate_content(full_prompt)
     return response.text
-except Exception as e:
-    return "Maaf, terjadi kesalahan saat mengambil data resep."
-
