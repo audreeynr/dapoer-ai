@@ -67,20 +67,19 @@ def handle_user_query(prompt, model):
         hasil = df_cleaned[df_cleaned['Steps'].str.len() < 300].head(5)['Title'].tolist()
         return "Rekomendasi masakan mudah:\n- " + "\n- ".join(hasil)
 
-    # Tool 5: RAG-like: Ambil 5 resep acak sebagai context
+    # Tool 5: RAG-like: Ambil 5 resep acak sebagai context (DIPERBAIKI)
     docs = "\n\n".join([
         f"{row['Title']}:\nBahan: {row['Ingredients']}\nLangkah: {row['Steps']}"
-        for _, row in df_cleaned.sample(5, random_state=42).iterrows()
+        for _, row in df_cleaned.sample(5).iterrows()  # TANPA random_state
     ])
-full_prompt = f"""
-Berikut beberapa resep masakan Indonesia yang dapat kamu jadikan referensi:
+
+    full_prompt = f"""
+Berikut beberapa resep masakan Indonesia:
 
 {docs}
 
-Gunakan contoh-contoh di atas **sebagai inspirasi atau acuan**, dan jawablah pertanyaan berikut dengan bebas:
-
-**Pertanyaan:**
+Gunakan referensi di atas untuk menjawab pertanyaan berikut:
 {prompt}
-
-Jika tidak ada jawaban yang persis dari contoh, berikan jawaban terbaik berdasarkan pengetahuan umum tentang resep Indonesia.
 """
+    response = model.generate_content(full_prompt)
+    return response.text
