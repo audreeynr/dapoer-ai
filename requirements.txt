@@ -1,7 +1,7 @@
+pandas
 streamlit
-google-generativeai
 langchain
 langchain-google-genai
+langchain-community
+google-generativeai
 faiss-cpu
-sentence-transformers
-pandas
