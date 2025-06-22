@@ -8,6 +8,9 @@ CSV_FILE_PATH = 'https://raw.githubusercontent.com/valengrcla/celerates/refs/hea
 df = pd.read_csv(CSV_FILE_PATH)
 df_cleaned = df.dropna(subset=['Title', 'Ingredients', 'Steps']).drop_duplicates()
 
+# Daftar kata kunci daerah
+DAERAH_KEYWORDS = ["bali", "padang", "sunda", "jawa", "kalimantan", "minang", "makassar", "bugis", "batak", "betawi", "aceh"]
+
 # Normalisasi
 def normalize_text(text):
     if isinstance(text, str):
@@ -42,6 +45,14 @@ def format_recipe(row):
 # Fungsi utama untuk handle pertanyaan
 def handle_user_query(prompt, model):
     prompt_lower = normalize_text(prompt)
+
+    # Tool 0: Deteksi permintaan berdasarkan daerah
+    for daerah in DAERAH_KEYWORDS:
+        if daerah in prompt_lower:
+            match_daerah = df_cleaned[df_cleaned['Title_Normalized'].str.contains(daerah)]
+            if not match_daerah.empty:
+                hasil = match_daerah.head(5)['Title'].tolist()
+                return f"Berikut beberapa masakan khas {daerah.capitalize()}:\n- " + "\n- ".join(hasil)
 
     # Tool 1: Cari berdasarkan nama masakan
     match_title = df_cleaned[df_cleaned['Title_Normalized'].str.contains(prompt_lower)]
