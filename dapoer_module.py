@@ -44,17 +44,21 @@ def handle_user_query(prompt, model):
     prompt_lower = normalize_text(prompt)
 
     # Tool 1: Cari berdasarkan judul masakan pakai keywords (mirip Tool 2)
-    
     def extract_judul_keywords(prompt_lower):
         stopwords = {"resep", "masakan", "masak", "bikin", "mau", "saya", "dong", "tolong", "aku", "bisa", "ingin", "pengen", "buat", "kasih", "berikan"}
         return [w for w in prompt_lower.split() if w not in stopwords and len(w) > 2]
     
     judul_keywords = extract_judul_keywords(prompt_lower)
     
+    print("Judul keywords:", judul_keywords)
+    print("Sample Title_Normalized:", df_cleaned['Title_Normalized'].sample(5).tolist())
+    
     if judul_keywords:
-        match_judul = df_cleaned[df_cleaned['Title_Normalized'].apply(lambda x: all(k in x for k in judul_keywords))]
+        match_judul = df_cleaned[df_cleaned['Title_Normalized'].apply(lambda x: any(k in x for k in judul_keywords))]
         if not match_judul.empty:
+            print("MATCHED:", match_judul['Title'].tolist())
             return format_recipe(match_judul.iloc[0])
+
 
     
     # Tool 2: Cari berdasarkan bahan (lebih fleksibel)
