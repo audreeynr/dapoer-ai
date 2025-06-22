@@ -55,6 +55,7 @@ def handle_user_query(prompt, model):
         match_judul = df_cleaned[df_cleaned['Title_Normalized'].apply(lambda x: all(k in x for k in judul_keywords))]
         if not match_judul.empty:
             return format_recipe(match_judul.iloc[0])
+
     
     # Tool 2: Cari berdasarkan bahan (lebih fleksibel)
     bahan_keywords = extract_bahan_keywords(prompt_lower)
