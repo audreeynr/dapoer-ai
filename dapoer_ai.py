@@ -16,7 +16,7 @@ if not GOOGLE_API_KEY:
 
 # Inisialisasi model Gemini via Langchain
 llm = ChatGoogleGenerativeAI(
-    model="gemini-pro",
+    model="models/gemini-1.5-flash"  # atau models/gemini-1.5-pro,
     google_api_key=GOOGLE_API_KEY,
     temperature=0
 )
