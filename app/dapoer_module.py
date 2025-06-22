@@ -4,7 +4,7 @@ import re
 import google.generativeai as genai
 
 # Load dan bersihkan data
-CSV_FILE_PATH = 'https://raw.githubusercontent.com/valengrcla/celerates/refs/heads/main/Indonesian_Food_Recipes.csv'
+CSV_FILE_PATH = 'https://raw.githubusercontent.com/audreeynr/dapoer-ai/refs/heads/main/data/Indonesian_Food_Recipes.csv'
 df = pd.read_csv(CSV_FILE_PATH)
 df_cleaned = df.dropna(subset=['Title', 'Ingredients', 'Steps']).drop_duplicates()
 
