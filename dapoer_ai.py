@@ -1,53 +1,51 @@
 # dapoer_ai.py
 import streamlit as st
-import google.generativeai as genai
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.agents import initialize_agent
 from langchain.memory import ConversationBufferMemory
-from langchain.chat_models import ChatOpenAI
-from dapoer_module import tools  # Langchain tools dari dapoer_module
+from dapoer_module import tools  # pastikan 'tools' sudah ada di modul
 
-# Pengaturan halaman
 st.set_page_config(page_title="Dapoer-AI", page_icon="🍲")
 st.title("🍛 Dapoer-AI - Asisten Resep Masakan Indonesia")
 
-# Input API Key
+# Masukkan API Key Gemini
 GOOGLE_API_KEY = st.text_input("Masukkan API Key Gemini kamu:", type="password")
 if not GOOGLE_API_KEY:
     st.warning("Silakan masukkan API key untuk mulai.")
     st.stop()
 
-# Konfigurasi model Gemini
-genai.configure(api_key=GOOGLE_API_KEY)
-llm = ChatOpenAI(model="gemini-pro", temperature=0)  # ChatOpenAI bisa diganti wrapper Gemini kamu
+# Inisialisasi model Gemini via Langchain
+llm = ChatGoogleGenerativeAI(
+    model="gemini-pro",
+    google_api_key=GOOGLE_API_KEY,
+    temperature=0
+)
 
-# Inisialisasi Langchain Agent dan Memory
+# Inisialisasi Memory & Agent
 if "agent" not in st.session_state:
-    memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+    memory = ConversationBufferMemory(memory_key="chat_history")
     st.session_state.agent = initialize_agent(
         tools=tools,
         llm=llm,
         agent_type="zero-shot-react-description",
         memory=memory,
-        verbose=False,
+        verbose=False
     )
-
-# Inisialisasi chat session
 if "messages" not in st.session_state:
     st.session_state.messages = []
     st.session_state.messages.append({"role": "assistant", "content": "👋 Hai! Mau masak apa hari ini?"})
 
-# Tampilkan chat history
+# Tampilkan riwayat chat
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# Input dari user
+# Input pengguna
 if prompt := st.chat_input("Tanyakan resep, bahan, atau metode memasak..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Jalankan Langchain Agent
     with st.chat_message("assistant"):
         response = st.session_state.agent.run(prompt)
         st.markdown(response)
