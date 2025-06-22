@@ -43,22 +43,16 @@ Langkah Memasak:
 def handle_user_query(prompt, model):
     prompt_lower = normalize_text(prompt)
 
-    # === Tool 1: Cari berdasarkan judul dengan overlap keyword ===
-    judul_keywords = extract_bahan_keywords(prompt_lower)
-    match_title = df_cleaned[df_cleaned['Title_Normalized'].apply(
-        lambda x: all(k in x for k in judul_keywords)
-    )]
+    # Tool 1: Cari berdasarkan nama masakan
+    match_title = df_cleaned[df_cleaned['Title_Normalized'].str.contains(prompt_lower)]
     if not match_title.empty:
         return format_recipe(match_title.iloc[0])
 
-    
-        # Ekstraksi keyword bahan dari prompt
-        def extract_bahan_keywords(prompt_lower):
-            stopwords = {"masakan", "apa", "saja", "yang", "bisa", "dibuat", "dari", "menggunakan", "bahan", "resep"}
-            kata_kunci = [w for w in prompt_lower.split() if w not in stopwords and len(w) > 2]
-            return kata_kunci
-
-
+    # Ekstraksi keyword bahan dari prompt
+    def extract_bahan_keywords(prompt_lower):
+        stopwords = {"masakan", "apa", "saja", "yang", "bisa", "dibuat", "dari", "menggunakan", "bahan", "resep"}
+        kata_kunci = [w for w in prompt_lower.split() if w not in stopwords and len(w) > 2]
+        return kata_kunci
     
     # Tool 2: Cari berdasarkan bahan (lebih fleksibel)
     bahan_keywords = extract_bahan_keywords(prompt_lower)
