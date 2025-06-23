@@ -1,5 +1,4 @@
-# --- dapoer_module.py versi FAISS dan Langchain ---
-
+# dapoer_module.py
 import pandas as pd
 import re
 from langchain.vectorstores import FAISS
