@@ -36,13 +36,7 @@ def format_recipe(row):
 
     langkah_md = row['Steps'].strip()
 
-    return f"""🍽 {row['Title']}
-
-Bahan-bahan:  
-{bahan_md}
-
-Langkah Memasak:  
-{langkah_md}"""
+    return f"""🍽 {row['Title']}\n\nBahan-bahan:  \n{bahan_md}\n\nLangkah Memasak:  \n{langkah_md}"""
 
 # Tool 1: Cari berdasarkan nama masakan
 def search_by_title(query):
