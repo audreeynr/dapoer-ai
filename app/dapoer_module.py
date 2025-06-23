@@ -9,6 +9,7 @@ from langchain.schema import Document
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.agents import Tool, initialize_agent
 from langchain.memory import ConversationBufferMemory
+import random
 
 # Load dan bersihkan data
 CSV_FILE_PATH = 'https://raw.githubusercontent.com/valengrcla/celerates/refs/heads/main/Indonesian_Food_Recipes.csv'
@@ -79,7 +80,7 @@ def recommend_easy_recipes(query):
         return "Rekomendasi masakan mudah:\n- " + "\n- ".join(hasil)
     return "Tidak ditemukan masakan mudah yang relevan."
 
-# Tool 5: RAG dengan FAISS
+# Tool 5: RAG dengan FAISS dan fallback RAG-Like
 
 def build_vectorstore(api_key):
     docs = []
@@ -99,8 +100,15 @@ def rag_search(api_key, query):
     vectorstore = build_vectorstore(api_key)
     retriever = vectorstore.as_retriever()
     docs = retriever.get_relevant_documents(query)
+
     if not docs:
-        return "Tidak ditemukan informasi yang relevan."
+        fallback_samples = df_cleaned.sample(5)
+        fallback_response = "\n\n".join([
+            f"{row['Title']}:\nBahan: {row['Ingredients']}\nLangkah: {row['Steps']}"
+            for _, row in fallback_samples.iterrows()
+        ])
+        return f"Tidak ditemukan informasi yang relevan. Berikut beberapa rekomendasi masakan acak:\n\n{fallback_response}"
+
     return "\n\n".join([doc.page_content for doc in docs[:5]])
 
 # Membuat Agent
@@ -120,7 +128,7 @@ def create_agent(api_key):
         Tool(name="SearchByIngredients", func=search_by_ingredients, description="Cari masakan berdasarkan bahan."),
         Tool(name="SearchByMethod", func=search_by_method, description="Cari masakan berdasarkan metode memasak."),
         Tool(name="RecommendEasyRecipes", func=recommend_easy_recipes, description="Rekomendasi masakan yang mudah dibuat."),
-        Tool(name="RAGSearch", func=rag_tool_func, description="Cari informasi masakan menggunakan FAISS dan RAG.")
+        Tool(name="RAGSearch", func=rag_tool_func, description="Cari informasi masakan menggunakan FAISS dan RAG dengan fallback rekomendasi acak.")
     ]
 
     memory = ConversationBufferMemory(memory_key="chat_history")
