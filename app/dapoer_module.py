@@ -90,7 +90,8 @@ def build_vectorstore(api_key):
     splitter = CharacterTextSplitter(chunk_size=300, chunk_overlap=30)
     texts = splitter.split_documents(docs)
 
-    embeddings = GoogleGenerativeAIEmbeddings(google_api_key=api_key)
+    # Tambahkan model name secara eksplisit
+    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=api_key)
     vectorstore = FAISS.from_documents(texts, embeddings)
     return vectorstore
 
