@@ -1,3 +1,4 @@
+# dapoer_module.py
 import pandas as pd
 import re
 from langchain.vectorstores import FAISS
@@ -7,6 +8,7 @@ from langchain.schema import Document
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.agents import Tool, initialize_agent
 from langchain.memory import ConversationBufferMemory
+import random
 
 # Load dan bersihkan data
 CSV_FILE_PATH = 'https://raw.githubusercontent.com/audreeynr/dapoer-ai/refs/heads/main/data/Indonesian_Food_Recipes.csv'
@@ -28,7 +30,6 @@ df_cleaned['Steps_Normalized'] = df_cleaned['Steps'].apply(normalize_text)
 
 # Format hasil masakan
 def format_recipe(row):
-    import re
     bahan_raw = re.split(r'\n|--|,', row['Ingredients'])
     bahan_list = [b.strip().capitalize() for b in bahan_raw if b.strip()]
     bahan_md = "\n".join([f"- {b}" for b in bahan_list])
@@ -78,14 +79,9 @@ def recommend_easy_recipes(query):
         return "Rekomendasi masakan mudah:\n- " + "\n- ".join(hasil)
     return "Tidak ditemukan masakan mudah yang relevan."
 
-# Vectorstore Cache
-vectorstore_cache = {}
-
 # Tool 5: RAG dengan FAISS dan fallback RAG-Like
-def build_vectorstore(api_key):
-    if api_key in vectorstore_cache:
-        return vectorstore_cache[api_key]
 
+def build_vectorstore(api_key):
     docs = []
     for _, row in df_cleaned.iterrows():
         content = f"Title: {row['Title']}\nIngredients: {row['Ingredients']}\nSteps: {row['Steps']}"
@@ -94,11 +90,10 @@ def build_vectorstore(api_key):
     splitter = CharacterTextSplitter(chunk_size=300, chunk_overlap=30)
     texts = splitter.split_documents(docs)
 
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=api_key)
+    embeddings = GoogleGenerativeAIEmbeddings(google_api_key=api_key)
     vectorstore = FAISS.from_documents(texts, embeddings)
-
-    vectorstore_cache[api_key] = vectorstore
     return vectorstore
+
 
 def rag_search(api_key, query):
     vectorstore = build_vectorstore(api_key)
@@ -116,6 +111,7 @@ def rag_search(api_key, query):
     return "\n\n".join([doc.page_content for doc in docs[:5]])
 
 # Membuat Agent
+
 def create_agent(api_key):
     llm = ChatGoogleGenerativeAI(
         model="gemini-1.5-flash",
