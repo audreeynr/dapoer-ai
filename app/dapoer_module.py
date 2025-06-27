@@ -1,6 +1,8 @@
 # dapoer_module.py
+
 import pandas as pd
 import re
+import streamlit as st
 from langchain.vectorstores import FAISS
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain.text_splitter import CharacterTextSplitter
@@ -80,7 +82,6 @@ def recommend_easy_recipes(query):
     return "Tidak ditemukan masakan mudah yang relevan."
 
 # Tool 5: RAG dengan FAISS dan fallback RAG-Like
-
 def build_vectorstore(api_key):
     docs = []
     for _, row in df_cleaned.iterrows():
@@ -94,9 +95,13 @@ def build_vectorstore(api_key):
     vectorstore = FAISS.from_documents(texts, embeddings)
     return vectorstore
 
+# Cache vectorstore per API Key
+@st.cache_resource
+def get_vectorstore(api_key):
+    return build_vectorstore(api_key)
 
 def rag_search(api_key, query):
-    vectorstore = build_vectorstore(api_key)
+    vectorstore = get_vectorstore(api_key)
     retriever = vectorstore.as_retriever()
     docs = retriever.get_relevant_documents(query)
 
@@ -111,7 +116,6 @@ def rag_search(api_key, query):
     return "\n\n".join([doc.page_content for doc in docs[:5]])
 
 # Membuat Agent
-
 def create_agent(api_key):
     llm = ChatGoogleGenerativeAI(
         model="gemini-1.5-flash",
