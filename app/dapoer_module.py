@@ -112,8 +112,7 @@ def create_agent(api_key):
         model="gemini-1.5-flash",
         google_api_key=api_key,
         temperature=0.7,
-        convert_system_message_to_human=True,
-        safety_settings={'HARASSMENT': 'BLOCK_NONE', 'HATE_SPEECH': 'BLOCK_NONE'}
+        convert_system_message_to_human=True
     )
 
     def rag_tool_func(query):
