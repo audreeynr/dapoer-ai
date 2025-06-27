@@ -6,7 +6,6 @@ from langchain.text_splitter import CharacterTextSplitter
 from langchain.schema import Document
 from langchain.agents import Tool, initialize_agent
 from langchain.memory import ConversationBufferMemory
-import random
 
 # Load dataset
 CSV_FILE_PATH = 'https://raw.githubusercontent.com/audreeynr/dapoer-ai/refs/heads/main/data/Indonesian_Food_Recipes.csv'
