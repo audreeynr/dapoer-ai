@@ -1,6 +1,7 @@
-streamlit
 pandas
-langchain==0.1.17
-langchain-google-genai==0.0.11
-faiss-cpu
+streamlit
+langchain
+langchain-google-genai
+langchain-community
 google-generativeai
+faiss-cpu
