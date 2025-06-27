@@ -134,10 +134,11 @@ def create_agent(api_key):
 
     agent = initialize_agent(
         tools=tools,
-        llm=llm,
-        agent="zero-shot-react-description",
-        memory=memory,
-        verbose=False
-    )
+llm = ChatGoogleGenerativeAI(
+    model="gemini-1.5-flash",
+    google_api_key=api_key,
+    convert_system_message_to_human=True  # Tambahkan ini
+)
+
 
     return agent
