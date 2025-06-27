@@ -1,7 +1,7 @@
 pandas
 streamlit
 langchain
-langchain-google-genai
+langchain-google-genai>=0.0.12
 langchain-community
 google-generativeai
 faiss-cpu
