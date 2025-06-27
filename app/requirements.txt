@@ -1,7 +1,6 @@
-pandas
 streamlit
-langchain
-langchain-google-genai>=0.0.12
-langchain-community
-google-generativeai
+pandas
+langchain==0.1.17
+langchain-google-genai==0.0.11
 faiss-cpu
+google-generativeai
