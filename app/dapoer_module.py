@@ -116,7 +116,9 @@ def create_agent(api_key):
     llm = ChatGoogleGenerativeAI(
         model="gemini-1.5-flash",
         google_api_key=api_key,
-        temperature=0.7
+        temperature=0.7,
+        convert_system_message_to_human=True,
+        safety_settings={'HARASSMENT': 'BLOCK_NONE', 'HATE_SPEECH': 'BLOCK_NONE'}
     )
 
     def rag_tool_func(query):
@@ -134,11 +136,10 @@ def create_agent(api_key):
 
     agent = initialize_agent(
         tools=tools,
-llm = ChatGoogleGenerativeAI(
-    model="gemini-1.5-flash",
-    google_api_key=api_key,
-    convert_system_message_to_human=True  # Tambahkan ini
-)
-
+        llm=llm,
+        agent="zero-shot-react-description",
+        memory=memory,
+        verbose=False
+    )
 
     return agent
