@@ -1,21 +1,19 @@
-# dapoer_module.py
 import pandas as pd
 import re
 from langchain.vectorstores import FAISS
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.schema import Document
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.agents import Tool, initialize_agent
 from langchain.memory import ConversationBufferMemory
 import random
 
-# Load dan bersihkan data
+# Load dataset
 CSV_FILE_PATH = 'https://raw.githubusercontent.com/audreeynr/dapoer-ai/refs/heads/main/data/Indonesian_Food_Recipes.csv'
 df = pd.read_csv(CSV_FILE_PATH)
 df_cleaned = df.dropna(subset=['Title', 'Ingredients', 'Steps']).drop_duplicates()
 
-# Normalisasi
+# Normalisasi teks
 def normalize_text(text):
     if isinstance(text, str):
         text = text.lower()
@@ -28,7 +26,7 @@ df_cleaned['Title_Normalized'] = df_cleaned['Title'].apply(normalize_text)
 df_cleaned['Ingredients_Normalized'] = df_cleaned['Ingredients'].apply(normalize_text)
 df_cleaned['Steps_Normalized'] = df_cleaned['Steps'].apply(normalize_text)
 
-# Format hasil masakan
+# Format tampilan resep
 def format_recipe(row):
     bahan_raw = re.split(r'\n|--|,', row['Ingredients'])
     bahan_list = [b.strip().capitalize() for b in bahan_raw if b.strip()]
@@ -38,7 +36,7 @@ def format_recipe(row):
 
     return f"""🍽 {row['Title']}\n\nBahan-bahan:  \n{bahan_md}\n\nLangkah Memasak:  \n{langkah_md}"""
 
-# Tool 1: Cari berdasarkan nama masakan
+# Tool 1: Cari berdasarkan judul
 def search_by_title(query):
     query_normalized = normalize_text(query)
     match_title = df_cleaned[df_cleaned['Title_Normalized'].str.contains(query_normalized)]
@@ -79,8 +77,7 @@ def recommend_easy_recipes(query):
         return "Rekomendasi masakan mudah:\n- " + "\n- ".join(hasil)
     return "Tidak ditemukan masakan mudah yang relevan."
 
-# Tool 5: RAG dengan FAISS dan fallback RAG-Like
-
+# Tool 5: RAG dengan FAISS
 def build_vectorstore(api_key):
     docs = []
     for _, row in df_cleaned.iterrows():
@@ -93,7 +90,6 @@ def build_vectorstore(api_key):
     embeddings = GoogleGenerativeAIEmbeddings(google_api_key=api_key)
     vectorstore = FAISS.from_documents(texts, embeddings)
     return vectorstore
-
 
 def rag_search(api_key, query):
     vectorstore = build_vectorstore(api_key)
@@ -110,13 +106,14 @@ def rag_search(api_key, query):
 
     return "\n\n".join([doc.page_content for doc in docs[:5]])
 
-# Membuat Agent
-
+# Create agent Langchain
 def create_agent(api_key):
     llm = ChatGoogleGenerativeAI(
         model="gemini-1.5-flash",
         google_api_key=api_key,
-        temperature=0.7
+        temperature=0.7,
+        convert_system_message_to_human=True,
+        safety_settings={'HARASSMENT': 'BLOCK_NONE', 'HATE_SPEECH': 'BLOCK_NONE'}
     )
 
     def rag_tool_func(query):
@@ -127,7 +124,7 @@ def create_agent(api_key):
         Tool(name="SearchByIngredients", func=search_by_ingredients, description="Cari masakan berdasarkan bahan."),
         Tool(name="SearchByMethod", func=search_by_method, description="Cari masakan berdasarkan metode memasak."),
         Tool(name="RecommendEasyRecipes", func=recommend_easy_recipes, description="Rekomendasi masakan yang mudah dibuat."),
-        Tool(name="RAGSearch", func=rag_tool_func, description="Cari informasi masakan menggunakan FAISS dan RAG dengan fallback rekomendasi acak.")
+        Tool(name="RAGSearch", func=rag_tool_func, description="Cari informasi masakan menggunakan FAISS dan RAG.")
     ]
 
     memory = ConversationBufferMemory(memory_key="chat_history")
@@ -137,7 +134,7 @@ def create_agent(api_key):
         llm=llm,
         agent="zero-shot-react-description",
         memory=memory,
-        verbose=False
+        verbose=True
     )
 
     return agent
