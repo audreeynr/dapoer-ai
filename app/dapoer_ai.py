@@ -5,11 +5,8 @@ from dapoer_module import create_agent
 st.set_page_config(page_title="Dapoer-AI", page_icon="🍲")
 st.title("🍛 Dapoer-AI - Asisten Resep Masakan Indonesia")
 
-# API Key input
-GOOGLE_API_KEY = st.text_input("Masukkan API Key Gemini kamu:", type="password")
-if not GOOGLE_API_KEY:
-    st.warning("Silakan masukkan API key untuk mulai.")
-    st.stop()
+# Ambil API Key dari secrets
+GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
 
 agent = create_agent(GOOGLE_API_KEY)
 
